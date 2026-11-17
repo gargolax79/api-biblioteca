@@ -1,14 +1,39 @@
 from fastapi import FastAPI, HTTPException
+from datos import (
+    calcular_proximo_id,
+    cargar_libros,
+    guardar_libros,
+    leer_texto_archivo,
+)
 from schemas import Libro, LibroConId, LibroParcial
 
 app = FastAPI()
 
-libros = []
-proximo_id = 1
+libros = cargar_libros()
+proximo_id = calcular_proximo_id(libros)
+ultimo_estado_archivo = leer_texto_archivo()
+
+
+def sincronizar_datos() -> None:
+    """Recarga los datos si el archivo cambió externamente en el disco."""
+    global libros, proximo_id, ultimo_estado_archivo
+    estado_actual = leer_texto_archivo()
+    if estado_actual != ultimo_estado_archivo:
+        libros = cargar_libros()
+        proximo_id = calcular_proximo_id(libros)
+        ultimo_estado_archivo = estado_actual
+
+
+def persistir_cambios() -> None:
+    """Guarda la lista de libros en el archivo y actualiza el estado conocido."""
+    global ultimo_estado_archivo
+    guardar_libros(libros)
+    ultimo_estado_archivo = leer_texto_archivo()
 
 
 def buscar_libro(id: int):
     """Busca un libro por su id o lanza 404 si no existe."""
+    sincronizar_datos()
     for libro in libros:
         if libro["id"] == id:
             return libro
@@ -34,8 +59,9 @@ def inicio():
 
 @app.get("/libros", response_model=list[LibroConId], summary="Listar libros")
 def listar_libros():
-    """Devuelve la lista de libros."""
-    return libros
+    """Devuelve la lista de libros ordenada por id."""
+    sincronizar_datos()
+    return sorted(libros, key=lambda libro: libro["id"])
 
 
 @app.post(
@@ -45,8 +71,9 @@ def listar_libros():
     summary="Crear un libro",
 )
 def crear_libro(libro: Libro):
-    """Crea un nuevo libro y le asigna un id único."""
+    """Crea un nuevo libro, le asigna un id único y lo guarda en archivo."""
     global proximo_id
+    sincronizar_datos()
     if existe_libro(libro.titulo, libro.autor):
         raise HTTPException(
             status_code=409,
@@ -55,6 +82,7 @@ def crear_libro(libro: Libro):
     nuevo = {"id": proximo_id, **libro.model_dump()}
     proximo_id += 1
     libros.append(nuevo)
+    persistir_cambios()
     return nuevo
 
 
@@ -74,9 +102,10 @@ def obtener_libro(id: int):
     summary="Reemplazar un libro por id",
 )
 def reemplazar_libro(id: int, datos: Libro):
-    """Reemplaza todos los campos del libro con ese id."""
+    """Reemplaza todos los campos del libro con ese id y guarda los cambios."""
     libro = buscar_libro(id)
     libro.update(datos.model_dump())
+    persistir_cambios()
     return libro
 
 
@@ -86,10 +115,11 @@ def reemplazar_libro(id: int, datos: Libro):
     summary="Actualizar parcialmente un libro por id",
 )
 def actualizar_libro(id: int, datos: LibroParcial):
-    """Actualiza solo los campos enviados del libro con ese id."""
+    """Actualiza solo los campos enviados del libro con ese id y guarda."""
     libro = buscar_libro(id)
     cambios = datos.model_dump(exclude_unset=True)
     libro.update(cambios)
+    persistir_cambios()
     return libro
 
 
@@ -99,6 +129,7 @@ def actualizar_libro(id: int, datos: LibroParcial):
     summary="Eliminar un libro por id",
 )
 def borrar_libro(id: int):
-    """Elimina el libro con ese id. Devuelve 204 sin contenido."""
+    """Elimina el libro con ese id y actualiza el archivo. Devuelve 204."""
     libro = buscar_libro(id)
     libros.remove(libro)
+    persistir_cambios()
