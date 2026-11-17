@@ -1,8 +1,11 @@
 import json
+import logging
 from pathlib import Path
 
 CARPETA_DATOS = Path(__file__).parent / "datos"
 RUTA_ARCHIVO = CARPETA_DATOS / "libros.json"
+
+logger = logging.getLogger(__name__)
 
 
 def leer_texto_archivo() -> str | None:
@@ -22,10 +25,17 @@ def cargar_libros() -> list[dict]:
         with open(RUTA_ARCHIVO, "r", encoding="utf-8") as archivo:
             datos = json.load(archivo)
             if not isinstance(datos, list):
+                logger.warning(
+                    "El archivo de datos no contiene una lista; iniciando vacío"
+                )
+                logger.warning("El archivo de datos no contiene una lista; iniciando vacío")
                 return []
             datos.sort(key=lambda libro: libro["id"])
             return datos
-    except (FileNotFoundError, json.JSONDecodeError, OSError, KeyError, TypeError):
+    except FileNotFoundError:
+        return []
+    except (json.JSONDecodeError, OSError, KeyError, TypeError):
+        logger.warning("Archivo de datos vacío o dañado; iniciando con lista vacía")
         return []
 
 

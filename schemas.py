@@ -1,4 +1,3 @@
-from typing import Optional
 from pydantic import BaseModel, Field
 
 
@@ -20,7 +19,7 @@ class LibroConId(Libro):
 class LibroParcial(BaseModel):
     """Modelo para actualizar parcialmente un libro (PATCH)."""
 
-    titulo: Optional[str] = Field(default=None, min_length=3, max_length=100)
-    autor: Optional[str] = Field(default=None, min_length=3, max_length=60)
-    anio: Optional[int] = Field(default=None, ge=1000, le=2100)
-    disponible: Optional[bool] = None
+    titulo: str | None = Field(default=None, min_length=3, max_length=100)
+    autor: str | None = Field(default=None, min_length=3, max_length=60)
+    anio: int | None = Field(default=None, ge=1000, le=2100)
+    disponible: bool | None = None
