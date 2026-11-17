@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import FastAPI, HTTPException
 from datos import (
     calcular_proximo_id,
@@ -58,10 +59,48 @@ def inicio():
 
 
 @app.get("/libros", response_model=list[LibroConId], summary="Listar libros")
-def listar_libros():
-    """Devuelve la lista de libros ordenada por id."""
+def listar_libros(
+    autor: Optional[str] = None,
+    disponible: Optional[bool] = None,
+    desde: int = 0,
+    limite: int = 100,
+):
+    """Lista libros ordenados por id, aplicando filtros opcionales y paginación."""
     sincronizar_datos()
-    return sorted(libros, key=lambda libro: libro["id"])
+    resultado = sorted(libros, key=lambda libro: libro["id"])
+
+    if autor is not None:
+        autor_buscado = autor.strip().lower()
+        resultado = [
+            libro
+            for libro in resultado
+            if libro["autor"].strip().lower() == autor_buscado
+        ]
+
+    if disponible is not None:
+        resultado = [
+            libro for libro in resultado if libro["disponible"] == disponible
+        ]
+
+    return resultado[desde : desde + limite]
+
+
+@app.get(
+    "/libros/buscar",
+    response_model=list[LibroConId],
+    summary="Buscar libros por texto",
+)
+def buscar_libros(texto: str):
+    """Busca libros cuyo título o autor contenga el texto indicado."""
+    sincronizar_datos()
+    buscado = texto.strip().lower()
+    libros_ordenados = sorted(libros, key=lambda libro: libro["id"])
+    return [
+        libro
+        for libro in libros_ordenados
+        if buscado in libro["titulo"].lower()
+        or buscado in libro["autor"].lower()
+    ]
 
 
 @app.post(
